@@ -298,7 +298,10 @@
       pickRoot();
       render();
     }, function (e) {
-      step('Agent backend', false, e.message + ': start it with scripts/serve_widget.py');
+      var local = window.location.hostname === 'localhost';
+      step('Agent backend', false, local ? e.message + ': start it with scripts/serve_widget.py'
+        : 'the offline demo needs the local server: run scripts/serve_widget.py and open https://localhost:8443/index.html ' +
+          '(in 3DDashboard, "Run your App", the widget uses the live tenant instead)');
     });
   }
 
