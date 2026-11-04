@@ -66,9 +66,7 @@ button:disabled { opacity: .5; cursor: default; }
 .settings label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 12px; }
 .settings input { width: 320px; max-width: 100%; }
 </style>
-</head>
-<body>
-  <div id="app"></div>
+  <!-- In <head>: 3DDashboard runs only head scripts and puts the body into widget.body itself -->
   <script>
 /*
  * Plain-code checks of the PLM Data Agent widget: release readiness and duplicate detection.
@@ -421,7 +419,13 @@ button:disabled { opacity: .5; cursor: default; }
   }
 
   function root() {
-    return document.getElementById('app') || (typeof widget !== 'undefined' && widget.body);
+    // In 3DDashboard the widget draws into widget.body; standalone into the page's #app
+    var body = inDashboard() && typeof widget !== 'undefined' && widget.body;
+    if (body) {
+      if (!body.id) { body.id = 'app'; }  // the stylesheet styles #app
+      return body;
+    }
+    return document.getElementById('app') || (typeof widget !== 'undefined' && widget.body) || null;
   }
 
   function step(name, ok, detail) {
@@ -947,11 +951,24 @@ button:disabled { opacity: .5; cursor: default; }
     if (query.get('dataset')) { state.dataset = query.get('dataset'); }
   } catch (e) { /* old browser: defaults */ }
 
+  // Show errors inside the widget: in 3DDashboard there is no console at hand during a demo
+  window.addEventListener('error', function (e) {
+    var el = root();
+    if (el) { append(el, h('div', { class: 'note bad' }, 'Widget error: ' + e.message + ' (' + (e.filename || '').split('/').pop() + ':' + e.lineno + ')')); }
+  });
+
   var started = false;
-  function once() { if (!started) { started = true; start(); } }
-  if (typeof widget !== 'undefined' && widget.addEvent) { widget.addEvent('onLoad', once); widget.addEvent('onRefresh', start); }
+  function once() { if (!started && root()) { started = true; start(); } }
+  if (typeof widget !== 'undefined' && widget.addEvent) {
+    widget.addEvent('onLoad', once);  // the widget's start in 3DDashboard
+    widget.addEvent('onRefresh', start);
+  }
   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', once); } else { once(); }
+  setTimeout(once, 3000);  // in case onLoad fired before this script registered
 })();
 </script>
+</head>
+<body>
+  <div id="app">Loading PLM Data Agent... (if this stays, the widget scripts did not run)</div>
 </body>
 </html>
