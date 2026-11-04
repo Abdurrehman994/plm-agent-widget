@@ -116,6 +116,8 @@
 
   function serviceUrl(Compass, platformId) {
     return new Promise(function (resolve, reject) {
+      // On the tenant this call has been seen to never answer: give up after 8 s and use a fallback
+      setTimeout(function () { reject(new Error('the platform did not answer getServiceUrl within 8 s')); }, 8000);
       Compass.getServiceUrl({
         serviceName: '3DSpace',
         platformId: platformId || undefined,
@@ -130,6 +132,20 @@
         onFailure: function (e) { reject(new Error('getServiceUrl failed: ' + (e && e.message || e))); }
       });
     });
+  }
+
+  // The frame URL names the tenant's ifwe domain (widgetDomain=https://r123-eu1-academia-ifwe.3dexperience.3ds.com);
+  // 3DSpace is the same host with -space and /enovia (as PLM_SPACE_URL in .env)
+  function spaceUrlFromFrame() {
+    try {
+      var domain = new URLSearchParams(window.location.search).get('widgetDomain') || '';
+      return /-ifwe\./.test(domain) ? domain.replace(/\/$/, '').replace('-ifwe.', '-space.') + '/enovia' : '';
+    } catch (e) { return ''; }
+  }
+
+  function tenantFromUrl(url) {
+    var host = (url.match(/^https?:\/\/([^/]+)/) || [])[1] || '';
+    return host.split('-')[0].toUpperCase();
   }
 
   function plm(method, path, options) {
@@ -151,7 +167,8 @@
         headers: headers,
         type: 'json',
         data: options.body ? JSON.stringify(options.body) : undefined,
-        timeout: 60000,
+        timeout: 30000,
+        onTimeout: function () { reject(new Error(method + ' ' + path.replace(ITEM, 'EngItem') + ': no answer within 30 s')); },
         onComplete: function (data) {
           if (typeof data === 'string') { try { data = data ? JSON.parse(data) : {}; } catch (e) { /* keep text */ } }
           resolve(data || {});
@@ -207,31 +224,38 @@
     return backend('api/config').then(function (cfg) {
       state.cfg = cfg; state.backend = true;
       step('Agent backend', true, 'proposal log reachable');
-    }, function (e) {
+    }, function () {
       state.backend = false;
-      step('Agent backend', false, 'not reachable (' + e.message + '): review shows only [PROPOSED] values found in PLM');
+      step('Agent backend', true, 'not used here: inside 3DDashboard the widget works on PLM alone (part-number ' +
+        'proposals and the proposal log stay with review.py)');
     }).then(function () {
       applySettings();
+      step('Platform modules', null, 'loading...');
       return loadModules();
     }).then(function (m) {
       state.WAFData = m.WAFData;
       step('Platform modules', true, 'WAFData and i3DXCompassServices loaded');
       var platformId = typeof widget !== 'undefined' && widget.getValue ? widget.getValue('x3dPlatformId') : '';
-      return serviceUrl(m.Compass, platformId).then(function (url) {
+      step('3DSpace URL', null, 'asking the platform...');
+      function use(url, source) {
         state.spaceUrl = url.replace(/\/$/, '');
-        state.tenant = platformId || state.cfg.tenant || '';
-        step('3DSpace URL', true, state.spaceUrl + (state.tenant ? ' (tenant ' + state.tenant + ')' : ''));
-      }, function (e) {
-        if (!state.cfg.spaceUrl) { throw e; }
-        state.spaceUrl = state.cfg.spaceUrl; state.tenant = state.cfg.tenant;
-        step('3DSpace URL', true, state.spaceUrl + ' (from .env: ' + e.message + ')');
+        state.tenant = platformId || state.cfg.tenant || tenantFromUrl(state.spaceUrl);
+        step('3DSpace URL', true, state.spaceUrl + ' (tenant ' + state.tenant + ', ' + source + ')');
+      }
+      if (state.cfg.spaceUrlOverride) { return use(state.cfg.spaceUrlOverride, 'entered under Connection'); }
+      return serviceUrl(m.Compass, platformId).then(function (url) { use(url, 'from the platform'); }, function (e) {
+        var fallback = state.cfg.spaceUrl || spaceUrlFromFrame();
+        if (!fallback) { throw new Error(e.message + '; enter the 3DSpace URL under Connection'); }
+        use(fallback, (state.cfg.spaceUrl ? 'from .env' : 'from the dashboard frame') + ': ' + e.message);
       });
     }).then(function () {
+      step('CSRF token', null, 'requesting...');
       return plm('GET', '/resources/v1/application/CSRF');
     }).then(function (data) {
       state.csrf = ((data || {}).csrf || {}).value;
       if (!state.csrf) { throw new Error('no CSRF token in ' + JSON.stringify(data).slice(0, 200)); }
       step('CSRF token', true, 'received');
+      step('Search', null, 'searching ' + (state.cfg.collabspace || 'all collab spaces') + '...');
       return loadSnapshot();
     }).catch(function (e) {
       step('Connection', false, e.message || String(e));
@@ -250,6 +274,7 @@
       step('Search', true, Object.keys(items).length + ' items in ' + (space || 'all collab spaces') +
         ' (of ' + members.length + ' found)');
       var snapshot = { items: items, children: {} };
+      step('BOM links', null, 'reading the structure of ' + Object.keys(items).length + ' items...');
       return mapLimit(Object.keys(items), 4, function (id) {
         return childrenOf(id).then(function (kids) { snapshot.children[id] = kids; });
       }).then(function () {
@@ -276,7 +301,7 @@
   function applySettings() {
     var saved = {};
     try { saved = JSON.parse(localStorage.getItem('plm-agent-settings') || '{}'); } catch (e) { /* none */ }
-    ['securityContext', 'collabspace'].forEach(function (k) { if (saved[k]) { state.cfg[k] = saved[k]; } });
+    ['securityContext', 'collabspace', 'spaceUrlOverride'].forEach(function (k) { if (saved[k]) { state.cfg[k] = saved[k]; } });
     if (!state.cfg.securityContext) {
       throw new Error('no SecurityContext: enter it under Connection (Role.Organization.CollabSpace)');
     }
@@ -544,9 +569,12 @@
   function viewConnection() {
     var context = h('input', { type: 'text', value: state.cfg.securityContext || '', placeholder: 'Role.Organization.CollabSpace' });
     var space = h('input', { type: 'text', value: state.cfg.collabspace || '', placeholder: 'Collab space' });
+    var spaceUrl = h('input', { type: 'text', value: state.cfg.spaceUrlOverride || '',
+      placeholder: 'optional, e.g. https://r123-eu1-academia-space.3dexperience.3ds.com/enovia' });
     function save() {
       try {
-        localStorage.setItem('plm-agent-settings', JSON.stringify({ securityContext: context.value.trim(), collabspace: space.value.trim() }));
+        localStorage.setItem('plm-agent-settings', JSON.stringify({ securityContext: context.value.trim(),
+          collabspace: space.value.trim(), spaceUrlOverride: spaceUrl.value.trim() }));
       } catch (e) { /* storage blocked: use the backend's values */ }
       start();
     }
@@ -556,15 +584,19 @@
       })) : null;
     return h('section', null,
       h('table', { class: 'steps' }, state.steps.map(function (s) {
-        return h('tr', null, h('td', { class: s.ok ? 'ok' : 'bad' }, s.ok ? '✓' : '✗'), h('td', null, h('b', null, s.name)), h('td', null, s.detail));
+        var mark = s.ok === null ? '…' : s.ok ? '✓' : '✗';
+        return h('tr', null, h('td', { class: s.ok === null ? 'busy' : s.ok ? 'ok' : 'bad' }, mark),
+          h('td', null, h('b', null, s.name)), h('td', null, s.detail));
       })),
       offlineButtons,
       state.mode === 'live' ? h('div', { class: 'settings' },
         h('label', null, 'SecurityContext ', context), h('label', null, 'Collab space ', space),
+        h('label', null, '3DSpace URL ', spaceUrl),
         h('button', { class: 'primary', onclick: save }, 'Save and reconnect')) : null,
-      h('p', { class: 'hint' }, 'Live mode calls 3DSpace with your own 3DEXPERIENCE session (WAFData). The agent backend on ',
-        h('code', null, document.baseURI.split('/').slice(0, 3).join('/')),
-        ' only holds the proposal log; it never sees your password or your PLM data.'));
+      h('p', { class: 'hint' }, state.mode === 'live'
+        ? 'Live mode calls 3DSpace with your own 3DEXPERIENCE session (WAFData): no password or token is stored in the widget, ' +
+          'and you see and change only what your role allows.'
+        : 'Offline demo: an in-memory tenant built from a dataset; nothing is written anywhere.'));
   }
 
   function render() {
