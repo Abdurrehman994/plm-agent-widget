@@ -8,7 +8,7 @@
   <meta name="autoRefresh" content="0" />
   <title>PLM Data Agent</title>
   <!-- Same widget without the UWA script: use this URL if index.html does not connect in "Run your App" -->
-  <style>
+  <style type="text/css">/*<![CDATA[*/
 :root { --blue: #005686; --sky: #368ec4; --ink: #1f2b36; --muted: #63707d; --line: #d9dee3; --bg: #f5f6f7;
   --ok: #2b7a3d; --ok-bg: #e6f4ea; --bad: #b3261e; --bad-bg: #fdecea; --busy-bg: #eef4fa; }
 * { box-sizing: border-box; }
@@ -65,9 +65,9 @@ button:disabled { opacity: .5; cursor: default; }
 .settings { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin: 10px 0; }
 .settings label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 12px; }
 .settings input { width: 320px; max-width: 100%; }
-</style>
+/*]]>*/</style>
   <!-- In <head>: 3DDashboard runs only head scripts and puts the body into widget.body itself -->
-  <script>
+  <script type="text/javascript">//<![CDATA[
 /*
  * Plain-code checks of the PLM Data Agent widget: release readiness and duplicate detection.
  *
@@ -359,8 +359,8 @@ button:disabled { opacity: .5; cursor: default; }
     words: words, findDuplicates: findDuplicates, findExisting: findExisting
   };
 });
-</script>
-  <script>
+//]]></script>
+  <script type="text/javascript">//<![CDATA[
 /*
  * PLM Data Agent widget for 3DDashboard ("Run your App").
  *
@@ -966,7 +966,7 @@ button:disabled { opacity: .5; cursor: default; }
   if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', once); } else { once(); }
   setTimeout(once, 3000);  // in case onLoad fired before this script registered
 })();
-</script>
+//]]></script>
 </head>
 <body>
   <div id="app">Loading PLM Data Agent... (if this stays, the widget scripts did not run)</div>
