@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
+<head>
+  <title>Probe</title>
+  <meta name="autoRefresh" content="0" />
+  <script type="text/javascript" src="//uwa.netvibes.com/lib/c/UWA/js/UWA_Standalone_Alone.js"></script>
+  <script type="text/javascript">//<![CDATA[
+    var Probe = {
+      onLoad: function () {
+        var lines = [
+          'widget: ' + (typeof widget),
+          'require: ' + (typeof require),
+          'in a frame: ' + (window.top !== window),
+          'page: ' + window.location.href,
+          'platformId: ' + (widget.getValue ? widget.getValue('x3dPlatformId') : 'n/a')
+        ];
+        widget.body.innerHTML = '<p><b>Probe loaded.</b></p><pre>' + lines.join('\n') + '</pre>';
+        if (typeof require === 'function') {
+          require(['DS/WAFData/WAFData'], function () {
+            widget.body.innerHTML += '<p><b>DS/WAFData: loaded</b></p>';
+          });
+        }
+      }
+    };
+    widget.addEvent('onLoad', Probe.onLoad);
+  //]]></script>
+</head>
+<body>
+  <p>Probe body (if only this shows, the head script did not run)</p>
+</body>
+</html>
