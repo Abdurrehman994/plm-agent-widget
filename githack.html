@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:widget="http://www.netvibes.com/ns/">
+<head>
+  <title>PLM Data Agent</title>
+  <meta name="author" content="Muhammad Abdur Rehman" />
+  <meta name="description" content="Review AI proposals, release readiness and duplicate parts of Engineering Items" />
+  <meta name="autoRefresh" content="0" />
+  <script type="text/javascript" src="//uwa.netvibes.com/lib/c/UWA/js/UWA_Standalone_Alone.js"></script>
+  <script type="text/javascript">//<![CDATA[
+    var PLMAgentLoader = {
+      base: 'https://raw.githack.com/Abdurrehman994/plm-agent-widget/main/',
+      version: '20261104224942',
+      onLoad: function () {
+        var head = document.getElementsByTagName('head')[0];
+        var css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = PLMAgentLoader.base + 'style.css?v=' + PLMAgentLoader.version;
+        head.appendChild(css);
+        widget.body.innerHTML = '<p>Loading PLM Data Agent...</p>';
+        PLMAgentLoader.load(['core.js', 'app.js'], 0);
+      },
+      load: function (files, n) {
+        if (n === files.length) { return; }
+        var script = document.createElement('script');
+        script.charset = 'utf-8';
+        script.src = PLMAgentLoader.base + files[n] + '?v=' + PLMAgentLoader.version;
+        script.onload = function () { PLMAgentLoader.load(files, n + 1); };
+        script.onerror = function () {
+          widget.body.innerHTML = '<p>Could not load ' + files[n] + ' from ' + PLMAgentLoader.base + '</p>';
+        };
+        document.getElementsByTagName('head')[0].appendChild(script);
+      }
+    };
+    widget.addEvent('onLoad', PLMAgentLoader.onLoad);
+  //]]></script>
+</head>
+<body>
+  <p>PLM Data Agent</p>
+</body>
+</html>
