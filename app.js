@@ -395,7 +395,7 @@
   }
 
   function applyInPlm(record, event, value) {
-    var item;
+    var item, final = null;
     return getItem(record.item_id).then(function (current) {
       item = current;
       // Conflict check on the field's content, as agent/writeback.py: someone may have edited it since
@@ -406,13 +406,20 @@
           JSON.stringify(expected) + '. It was changed in PLM; review it there.');
       }
       if (event === 'rejected' && !record.written_to_plm) { return null; }  // a part number never reached PLM
-      var final = event === 'approved' ? value : (record.old_value || '');
+      final = event === 'approved' ? value : (record.old_value || '');
       var body = attributes(record.field, final);
       body.cestamp = item.cestamp;
       return plm('PATCH', ITEM + '/' + record.item_id, { params: { $mask: MASK }, body: body });
     }).then(function (data) {
+      // Keep the local copy in step with PLM even if the PATCH answer leaves the field out: a stale
+      // [PROPOSED] value would bring the decided card back, and a second click would report a conflict
       var updated = data && (data.member || [])[0];
-      if (updated) { state.snapshot.items[record.item_id] = updated; }
+      var local = updated || state.snapshot.items[record.item_id];
+      if (local && final !== null) {
+        if (record.field === 'partNumber') { local['dseng:EnterpriseReference'] = { partNumber: final }; }
+        else { local[record.field] = final; }
+      }
+      if (local) { state.snapshot.items[record.item_id] = local; }
       if (!record.proposal_id || !state.backend) { return 'Done in PLM (no proposal log entry to update).'; }
       var decision = { proposal_id: record.proposal_id, event: event };
       if (event === 'approved') { decision.final_value = value; }
